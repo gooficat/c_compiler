@@ -179,7 +179,8 @@ vector_AsmArg ParseArgs(AsmUnit *unit, const vector_Token tokens, size_t *index)
             if (isalpha(tokens.at(i).name[0]))
             {
                 // check if it is an instruction / label declaration
-                if (FindInstructionNameOnly(tokens.at(i)) || tokens.at(i + 1).name[0] == ':')
+                if (FindInstructionNameOnly(tokens.at(i)) ||
+                    (i + 1 < tokens.size && tokens.at(i + 1).name[0] == ':'))
                     break;
 
                 const size_t reg = FindRegisterIndex(tokens.at(i));
@@ -208,7 +209,7 @@ vector_AsmArg ParseArgs(AsmUnit *unit, const vector_Token tokens, size_t *index)
             }
             else
             {
-                printf("Unknown type '%*.s'\n", tokens.at(i).length, tokens.at(i).name);
+                printf("Unknown type '%.*s'\n", tokens.at(i).length, tokens.at(i).name);
             }
             ++i;
         }
@@ -325,9 +326,9 @@ const AsmOpcode *FindInstruction(AsmInstruc *ins, AsmUnit *unit)
 
             return &INSTRUCTION_SET[i];
         }
+    no_match:
+        printf("It's not a match for %.*s\n", ins->name.length, ins->name.name);
     }
-no_match:
-    printf("It's not a match! Returning null\n");
 
     return NULL;
 }
@@ -345,12 +346,12 @@ void EncodeInstruction(AsmUnit *unit, size_t index)
 
     if (!op)
     {
-        printf("Failed to find instruction profile for '%*.s'\n", ins->name.length, ins->name.name);
-        exit(EXIT_FAILURE);
+        printf("Failed to find instruction profile for '%.*s'\n", ins->name.length, ins->name.name);
+        // exit(EXIT_FAILURE);
     }
 
-    opcode = op->code;
-    printf("Opcode %02hhx\n", opcode);
+    // opcode = op->code;
+    // printf("Opcode %02hhx\n", opcode);
 }
 
 void EncodeBytes(AsmUnit *unit)
