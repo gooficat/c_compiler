@@ -1,0 +1,9 @@
+{
+    "name": "c-compiler",
+    "version": "1.0.0",
+    "description": "A c_compiler project using vcpkg for dependency management",
+    "homepage": "",
+    "dependencies": [],
+    "builtin-baseline": "x-custom-baseline",
+    "overrides": []
+}
