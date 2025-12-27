@@ -44,7 +44,7 @@ CLASS(AsmRegister)
 const AsmOpcode INSTRUCTION_SET[] = {
     {"add", 0x00, {REG | MEM | BYT, REG | BYT}},
     {"add", 0x02, {REG | MEM | WOR, REG | WOR}},
-    {"mov", 0x99, {REG | WOR, IMM | WOR | BYT}},  // imaginary. i dont know the real one right now
+    {"mov", 0x99, {REG | WOR, IMM | WOR}},  // imaginary. i dont know the real one right now
 
     {"mov", 0x88, {REG | MEM | BYT, REG | BYT}},
     {"mov", 0x8A, {REG | MEM | WOR, REG | WOR}},
@@ -349,6 +349,7 @@ void EncodeInstruction(AsmUnit *unit, size_t index)
     u8 mod_rm = 0;
     u8 opcode;
     u16 disp[2] = {0};
+    u8 disp_sz[2] = {0};
 
     AsmInstruc *ins = &unit->instructions.at(index);
 
@@ -363,25 +364,27 @@ void EncodeInstruction(AsmUnit *unit, size_t index)
     opcode = op->code;
     printf("Opcode %02hhX\n", opcode);
 
-    if (ins->args.size == 1)
+    for (u8 i = 0; i != ins->args.size; ++i)
     {
-        if (ins->args.at(0).indirection)
+        if (ins->args.at(i).indirection)
         {
         }
-        else if (ins->args.at(0).type == ARG_REG)
+        else if (ins->args.at(i).type == ARG_REG)
             opcode += REGISTERS[ins->args.at(0).value].code;
         else
-            disp[0] = ins->args.at(0).value;
-    }
-    else if (ins->args.size == 2)
-    {
-        //
+        {
+            disp[i] = ins->args.at(i).value;
+            disp_sz[i] = (op->prof[i] & BYT) ? 1 : 2;
+        }
     }
     PUSH(unit->bytes, opcode);
-    if (disp[0])
-        PUSH(unit->bytes, disp[0] & 0xFF);
-    if (disp[0] > 0xFF)
-        PUSH(unit->bytes, ((disp[0] << 8) & 0xFF));
+    for (u8 i = 0; i != 2; ++i)
+    {
+        if (disp_sz[i] >= 1)
+            PUSH(unit->bytes, disp[i] & 0xFF);
+        if (disp_sz[i] >= 2)
+            PUSH(unit->bytes, ((disp[i] >> 8) & 0xFF));
+    }
 }
 
 void EncodeBytes(AsmUnit *unit)
@@ -493,8 +496,8 @@ int main(void)
 
     // EstimateLabels(&unit);
     // no need to estimate labels. we just need to start parsing, and at each label we find, we
-    // check if its value matches up with the current byte count. if it doesnt, we set the flag for
-    // a recount which means we will do another cycle after the current one
+    // check if its value matches up with the current byte count. if it doesnt, we set the flag
+    // for a recount which means we will do another cycle after the current one
 
     while (unit.has_shrinkables)
     {
