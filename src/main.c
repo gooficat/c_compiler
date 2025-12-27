@@ -333,6 +333,16 @@ const AsmOpcode *FindInstruction(AsmInstruc *ins, AsmUnit *unit)
     return NULL;
 }
 
+u8 SizeFromProfile(AsmArgProf prof)
+{
+    if (prof & BYT)
+        return 1;
+    if (prof & WOR || prof & SZV)
+        return 2;
+    //
+    return 1;
+}
+
 void EncodeInstruction(AsmUnit *unit, size_t index)
 {
     bool has_mod = false;
@@ -347,11 +357,31 @@ void EncodeInstruction(AsmUnit *unit, size_t index)
     if (!op)
     {
         printf("Failed to find instruction profile for '%.*s'\n", ins->name.length, ins->name.name);
-        // exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);
     }
 
-    // opcode = op->code;
-    // printf("Opcode %02hhx\n", opcode);
+    opcode = op->code;
+    printf("Opcode %02hhX\n", opcode);
+
+    if (ins->args.size == 1)
+    {
+        if (ins->args.at(0).indirection)
+        {
+        }
+        else if (ins->args.at(0).type == ARG_REG)
+            opcode += REGISTERS[ins->args.at(0).value].code;
+        else
+            disp[0] = ins->args.at(0).value;
+    }
+    else if (ins->args.size == 2)
+    {
+        //
+    }
+    PUSH(unit->bytes, opcode);
+    if (disp[0])
+        PUSH(unit->bytes, disp[0] & 0xFF);
+    if (disp[0] > 0xFF)
+        PUSH(unit->bytes, ((disp[0] << 8) & 0xFF));
 }
 
 void EncodeBytes(AsmUnit *unit)
@@ -472,6 +502,9 @@ int main(void)
         unit.bytes.size = 0;
         EncodeBytes(&unit);
     }
+
+    for (size_t i = 0; i != unit.bytes.size; ++i)
+        printf("%02hhX\t", unit.bytes.at(i));
 
     return 0;
 }
