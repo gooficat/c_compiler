@@ -44,6 +44,7 @@ CLASS(AsmRegister)
 const AsmOpcode INSTRUCTION_SET[] = {
     {"add", 0x00, {REG | MEM | BYT, REG | BYT}},
     {"add", 0x02, {REG | MEM | WOR, REG | WOR}},
+    {"mov", 0x99, {REG | WOR, IMM | WOR | BYT}},  // imaginary. i dont know the real one right now
 
     {"mov", 0x88, {REG | MEM | BYT, REG | BYT}},
     {"mov", 0x8A, {REG | MEM | WOR, REG | WOR}},
@@ -298,13 +299,13 @@ const AsmOpcode *FindInstruction(AsmInstruc *ins, AsmUnit *unit)
                 switch (arg->type)
                 {
                 case ARG_IMM:
-                    if (!(op->prof[j] & IMM) && !SizeMatchProf(op->prof[j], arg->value))
+                    if (!(op->prof[j] & IMM) || !SizeMatchProf(op->prof[j], arg->value))
                         goto no_match;
                     break;
                 case ARG_LAB:
                 {
                     AsmLabel *lb = &unit->labels.at(arg->value);
-                    if (!(op->prof[j] & IMM) && !SizeMatchProf(op->prof[j], lb->offset))
+                    if (!(op->prof[j] & IMM) || !SizeMatchProf(op->prof[j], lb->offset))
                         goto no_match;
                 }
                 break;
