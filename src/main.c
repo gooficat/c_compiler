@@ -394,30 +394,39 @@ void EncodeInstruction(AsmUnit *unit, size_t index)
                                 : ins->args.at(1).value,
     };
 
-    for (u8 i = 0; i != ins->args.size; ++i)
+    if (ins->args.size == 1)
     {
-        switch (ins->args.at(i).type)
+        if (!ins->args.at(0).indirection)
         {
-        case ARG_MEM:
-        case ARG_IMM:
-        {
-            disp[i * 2] = v[i] & 0xFF;
-            has_disp[i * 2] = true;
-            if (v[i] > 0xFF)
+            if (ins->args.at(0).type == ARG_REG)
+                opcode += REGISTERS[ins->args.at(0).value].code;
+            else
             {
-                disp[i * 2 + 1] = (v[i] >> 8) & 0xFF;
-                has_disp[i * 2 + 1] = true;
+                has_disp[0] = true;
+                disp[0] = ins->args.at(0).value & 0xFF;
+                if (ins->args.at(0).value > 0xFF)
+                {
+                    has_disp[1] = true;
+                    disp[1] = (ins->args.at(0).value >> 8) & 0xFF;
+                }
             }
         }
-        break;
-        case ARG_REG:
-            if (!ins->args.at(i).indirection)
-            {
-                opcode += REGISTERS[v[i]].code;
-            }
-            break;
+        else
+        {
         }
     }
+    else if (ins->args.size == 2)
+    {
+        if (ins->args.at(0).type == ARG_REG && ins->args.at(1).type == ARG_REG)
+        {
+            has_modrm = true;
+            modrm |= (3 << 6);  // mod (6 and 7) to 11
+            printf("reg and reg %02hhx %02hhx\n", modrm, REGISTERS[ins->args.at(0).value].code);
+            modrm |= (REGISTERS[ins->args.at(0).value].code) & 0xFF;
+            modrm |= (REGISTERS[ins->args.at(1).value].code << 3) & 0xFF;
+        }
+    }
+
     PUSH(unit->bytes, opcode);
     if (has_modrm)
         PUSH(unit->bytes, modrm);

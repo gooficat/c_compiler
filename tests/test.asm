@@ -1,6 +1,4 @@
 main:
-    mov ax, 23232
-    mov bx, ax
-    xor cx, cx
+    mov cx, bx
     int 16
     ret
