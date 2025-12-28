@@ -404,7 +404,7 @@ void EncodeInstruction(AsmUnit *unit, size_t index)
             {
                 has_disp[0] = true;
                 disp[0] = ins->args.at(0).value & 0xFF;
-                if (ins->args.at(0).value > 0xFF)
+                if (op->prof[0] & WOR || op->prof[0] & SZV)
                 {
                     has_disp[1] = true;
                     disp[1] = (ins->args.at(0).value >> 8) & 0xFF;
