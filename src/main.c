@@ -183,7 +183,7 @@ vector_AsmArg ParseArgs(AsmUnit *unit, const vector_Token tokens, size_t *index)
         AsmArg arg = {0};
         if (tokens.at(i).name[0] == '[')
         {
-            arg.indirection = 1;
+            arg.indirection = 1;  // TODO
         }
         else
         {
@@ -266,7 +266,7 @@ void ParseInstructions(AsmUnit *unit, const vector_Token tokens)
         else if (tokens.at(i).name[0] == '.')
         {
             instruc.type = ASM_DIREC;
-            //
+            // TODO
         }
         else
         {
@@ -417,13 +417,23 @@ void EncodeInstruction(AsmUnit *unit, size_t index)
     }
     else if (ins->args.size == 2)
     {
-        if (ins->args.at(0).type == ARG_REG && ins->args.at(1).type == ARG_REG)
+        if (!ins->args.at(0).indirection && !ins->args.at(1).indirection)
         {
-            has_modrm = true;
-            modrm |= (3 << 6);  // mod (6 and 7) to 11
-            printf("reg and reg %02hhx %02hhx\n", modrm, REGISTERS[ins->args.at(0).value].code);
-            modrm |= (REGISTERS[ins->args.at(0).value].code) & 0xFF;
-            modrm |= (REGISTERS[ins->args.at(1).value].code << 3) & 0xFF;
+            if (ins->args.at(0).type == ARG_REG && ins->args.at(1).type == ARG_REG)
+            {
+                has_modrm = true;
+                modrm |= (3 << 6);  // mod (6 and 7) to 11
+                modrm |= (REGISTERS[ins->args.at(0).value].code) & 0xFF;
+                modrm |= (REGISTERS[ins->args.at(1).value].code << 3) & 0xFF;
+            }
+            else
+            {
+                // TODO
+            }
+        }
+        else
+        {
+            // TODO
         }
     }
 
