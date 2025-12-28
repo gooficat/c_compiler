@@ -58,6 +58,7 @@ const AsmOpcode INSTRUCTION_SET[] = {
 
     {"call", 0xE8, {REL | SZV}},
     {"jmp", 0xE9, {REL | SZV}},
+    // TODO support 0xEA (absolute jump with segment)
     {"jmp", 0xEB, {REL | BYT}},
 
     {"push", 0x50, {REG | WOR}},
