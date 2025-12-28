@@ -5,7 +5,6 @@
 ENUM(AsmArgType,
      {
          ARG_IMM,
-         ARG_LAB,
          ARG_REG,
          ARG_MEM,
      }  //
@@ -43,14 +42,26 @@ CLASS(AsmRegister)
 
 const AsmOpcode INSTRUCTION_SET[] = {
     {"add", 0x00, {REG | MEM | BYT, REG | BYT}},
-    {"add", 0x02, {REG | MEM | WOR, REG | WOR}},
-    {"mov", 0x99, {REG | WOR, IMM | WOR}},  // imaginary. i dont know the real one right now
+    {"add", 0x01, {REG | MEM | WOR, REG | WOR}},
+    {"add", 0x02, {MEM | BYT, REG | MEM | BYT}},
+    {"add", 0x03, {MEM | WOR, REG | MEM | WOR}},
 
     {"mov", 0x88, {REG | MEM | BYT, REG | BYT}},
-    {"mov", 0x8A, {REG | MEM | WOR, REG | WOR}},
-    {"mov", 0x8B, {REG | WOR, REG | MEM | WOR}},
+    {"mov", 0x89, {REG | MEM | WOR, REG | WOR}},
+    {"mov", 0x8A, {MEM | BYT, REG | MEM | BYT}},
+    {"mov", 0x8B, {MEM | WOR, REG | MEM | WOR}},
 
-    {"xor", 0x20, {REG | MEM | WOR, REG | WOR} /*?? i made this opcode up, the mnem is real*/},
+    {"xor", 0x30, {REG | MEM | BYT, REG | BYT}},
+    {"xor", 0x31, {REG | MEM | WOR, REG | WOR}},
+    {"xor", 0x32, {MEM | BYT, REG | MEM | BYT}},
+    {"xor", 0x33, {MEM | WOR, REG | MEM | WOR}},
+
+    {"call", 0xE8, {REL | SZV}},
+    {"jmp", 0xE9, {REL | SZV}},
+    {"jmp", 0xEB, {REL | BYT}},
+
+    {"push", 0x50, {REG | WOR}},
+    {"int", 0xCD, {IMM | BYT}},
 
     {"ret", 0xC3, {NOA}},
 };
@@ -94,6 +105,7 @@ const AsmRegister *FindRegister(const StringView name)
 CLASS(AsmArg)
 {
     AsmArgType type;
+    bool label;  // instead of ARG_LAB I want to make it a flag
     u8 indirection;
     char operation;
     AsmArg *operand;
@@ -168,7 +180,7 @@ vector_AsmArg ParseArgs(AsmUnit *unit, const vector_Token tokens, size_t *index)
 
     while (i < tokens.size)
     {
-        AsmArg arg;
+        AsmArg arg = {0};
         if (tokens.at(i).name[0] == '[')
         {
             arg.indirection = 1;
@@ -191,7 +203,8 @@ vector_AsmArg ParseArgs(AsmUnit *unit, const vector_Token tokens, size_t *index)
                 }
                 else
                 {
-                    arg.type = ARG_LAB;
+                    arg.type = ARG_IMM;
+                    arg.label = true;
                     arg.value = FindLabelIndex(unit, tokens.at(i));
                 }
             }
@@ -206,6 +219,18 @@ vector_AsmArg ParseArgs(AsmUnit *unit, const vector_Token tokens, size_t *index)
             else if (tokens.at(i).name[0] == '$')
             {
                 arg.type = ARG_MEM;  //
+                ++i;
+                if (isdigit(tokens.at(i).name[0]))
+                {
+                    char *end_of_num = tokens.at(i).name + tokens.at(i).length - 1;
+                    // assume decimal for now. TODO: add hexadecimal / binary
+                    arg.value = strtoull(tokens.at(i).name, &end_of_num, 10);
+                }
+                else
+                {
+                    arg.label = true;
+                    arg.value = FindLabelIndex(unit, tokens.at(i));
+                }
             }
             else
             {
@@ -297,37 +322,31 @@ const AsmOpcode *FindInstruction(AsmInstruc *ins, AsmUnit *unit)
             for (u8 j = 0; j < ins->args.size; ++j)
             {
                 AsmArg *arg = &ins->args.at(j);
+                u64 v = arg->label ? unit->labels.at(arg->value).offset : arg->value;
                 switch (arg->type)
                 {
                 case ARG_IMM:
-                    if (!(op->prof[j] & IMM) || !SizeMatchProf(op->prof[j], arg->value))
+                    if (!(op->prof[j] & IMM) || !SizeMatchProf(op->prof[j], v))
                         goto no_match;
                     break;
-                case ARG_LAB:
-                {
-                    AsmLabel *lb = &unit->labels.at(arg->value);
-                    if (!(op->prof[j] & IMM) || !SizeMatchProf(op->prof[j], lb->offset))
-                        goto no_match;
-                }
-                break;
                 case ARG_MEM:
                 {
                     // todo
                 }
                 break;
                 case ARG_REG:
-                    if (!(op->prof[j] & REG) || !(REGISTERS[arg->value].size & op->prof[j]))
+                    if (!(op->prof[j] & REG) || !(REGISTERS[v].size & op->prof[j]))
                         goto no_match;
                     break;
                 }
             }
 
-            printf("It's a match! Returning instruction profile for opcode %02hhX\n", op->code);
+            // printf("It's a match! Returning instruction profile for opcode %02hhX\n", op->code);
 
             return &INSTRUCTION_SET[i];
         }
-    no_match:
-        printf("It's not a match for %.*s\n", ins->name.length, ins->name.name);
+    no_match:;
+        // printf("It's not a match for %.*s\n", ins->name.length, ins->name.name);
     }
 
     return NULL;
@@ -345,12 +364,6 @@ u8 SizeFromProfile(AsmArgProf prof)
 
 void EncodeInstruction(AsmUnit *unit, size_t index)
 {
-    bool has_mod = false;
-    u8 mod_rm = 0;
-    u8 opcode;
-    u16 disp[2] = {0};
-    u8 disp_sz[2] = {0};
-
     AsmInstruc *ins = &unit->instructions.at(index);
 
     const AsmOpcode *op = FindInstruction(&unit->instructions.at(index), unit);
@@ -361,29 +374,57 @@ void EncodeInstruction(AsmUnit *unit, size_t index)
         exit(EXIT_FAILURE);
     }
 
-    opcode = op->code;
-    printf("Opcode %02hhX\n", opcode);
+    printf("'%.*s' has opcode %02hhX\n", ins->name.length, ins->name.name, op->code);
+
+    u8 opcode = op->code;
+    // todo: prefixes
+
+    u8 modrm = 0;
+    bool has_modrm = false;
+
+    u8 disp[4];
+    bool has_disp[4] = {false};
+
+    u64 v[2] = {
+        ins->args.size < 1      ? 0
+        : ins->args.at(0).label ? unit->labels.at(ins->args.at(0).value).offset
+                                : ins->args.at(0).value,
+        ins->args.size < 2      ? 0
+        : ins->args.at(1).label ? unit->labels.at(ins->args.at(1).value).offset
+                                : ins->args.at(1).value,
+    };
 
     for (u8 i = 0; i != ins->args.size; ++i)
     {
-        if (ins->args.at(i).indirection)
+        switch (ins->args.at(i).type)
         {
+        case ARG_MEM:
+        case ARG_IMM:
+        {
+            disp[i * 2] = v[i] & 0xFF;
+            has_disp[i * 2] = true;
+            if (v[i] > 0xFF)
+            {
+                disp[i * 2 + 1] = (v[i] >> 8) & 0xFF;
+                has_disp[i * 2 + 1] = true;
+            }
         }
-        else if (ins->args.at(i).type == ARG_REG)
-            opcode += REGISTERS[ins->args.at(0).value].code;
-        else
-        {
-            disp[i] = ins->args.at(i).value;
-            disp_sz[i] = (op->prof[i] & BYT) ? 1 : 2;
+        break;
+        case ARG_REG:
+            if (!ins->args.at(i).indirection)
+            {
+                opcode += REGISTERS[v[i]].code;
+            }
+            break;
         }
     }
     PUSH(unit->bytes, opcode);
-    for (u8 i = 0; i != 2; ++i)
+    if (has_modrm)
+        PUSH(unit->bytes, modrm);
+    for (u8 i = 0; i != 4; ++i)
     {
-        if (disp_sz[i] >= 1)
-            PUSH(unit->bytes, disp[i] & 0xFF);
-        if (disp_sz[i] >= 2)
-            PUSH(unit->bytes, ((disp[i] >> 8) & 0xFF));
+        if (has_disp[i])
+            PUSH(unit->bytes, disp[i]);
     }
 }
 
@@ -473,14 +514,12 @@ int main(void)
             for (size_t j = 0; j < unit.instructions.at(i).args.size; ++j)
             {
                 printf("\targ type ");
-
+                if (unit.instructions.at(i).args.at(j).label)
+                    printf("as label ");
                 switch (unit.instructions.at(i).args.at(j).type)
                 {
                 case ARG_IMM:
                     printf("immediate: ");
-                    break;
-                case ARG_LAB:
-                    printf("label: ");
                     break;
                 case ARG_MEM:
                     printf("memory: ");
@@ -495,9 +534,9 @@ int main(void)
     }
 
     // EstimateLabels(&unit);
-    // no need to estimate labels. we just need to start parsing, and at each label we find, we
-    // check if its value matches up with the current byte count. if it doesnt, we set the flag
-    // for a recount which means we will do another cycle after the current one
+    // no need to estimate labels. we just need to start parsing, and at each label we find,
+    // we check if its value matches up with the current byte count. if it doesnt, we set
+    // the flag for a recount which means we will do another cycle after the current one
 
     while (unit.has_shrinkables)
     {
