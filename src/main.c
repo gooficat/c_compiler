@@ -384,7 +384,7 @@ void EncodeInstruction(AsmUnit *unit, size_t index)
     bool has_modrm = false;
 
     u8 disp[4];
-    bool has_disp[4] = {false};
+    u8 n_disp = 0;
 
     u64 v[2] = {
         ins->args.size < 1      ? 0
@@ -395,56 +395,37 @@ void EncodeInstruction(AsmUnit *unit, size_t index)
                                 : ins->args.at(1).value,
     };
 
-    if (ins->args.size == 1)
-    {
-        if (!ins->args.at(0).indirection)
-        {
-            if (ins->args.at(0).type == ARG_REG)
-                opcode += REGISTERS[ins->args.at(0).value].code;
-            else
-            {
-                has_disp[0] = true;
-                disp[0] = ins->args.at(0).value & 0xFF;
-                if (op->prof[0] & WOR || op->prof[0] & SZV)
-                {
-                    has_disp[1] = true;
-                    disp[1] = (ins->args.at(0).value >> 8) & 0xFF;
-                }
-            }
-        }
-        else
-        {
-        }
-    }
-    else if (ins->args.size == 2)
+    if (op->prof[0] & MEM || op->prof[1] & MEM)
     {
         if (!ins->args.at(0).indirection && !ins->args.at(1).indirection)
         {
-            if (ins->args.at(0).type == ARG_REG && ins->args.at(1).type == ARG_REG)
-            {
-                has_modrm = true;
-                modrm |= (3 << 6);  // mod (6 and 7) to 11
-                modrm |= (REGISTERS[ins->args.at(0).value].code) & 0xFF;
-                modrm |= (REGISTERS[ins->args.at(1).value].code << 3) & 0xFF;
-            }
-            else
-            {
-                // TODO
-            }
-        }
+            modrm |= (3 << 6);  // mod 11
+
+            modrm |= REGISTERS[ins->args.at(0).value].code & 0xFF;
+            modrm |= (REGISTERS[ins->args.at(1).value].code << 3) & 0xFF;
+
+        }  //
         else
         {
-            // TODO
+            AsmArg *ind_arg = ins->args.at(0).indirection ? &ins->args.at(0) : &ins->args.at(1);
+            AsmArg *nind_arg =
+                ins->args.size > 1
+                    ? (!ins->args.at(0).indirection ? &ins->args.at(0) : &ins->args.at(1))
+                    : NULL;
+
+            if (ind_arg->type == ARG_REG)
+            {
+                //
+            }
         }
     }
 
     PUSH(unit->bytes, opcode);
     if (has_modrm)
         PUSH(unit->bytes, modrm);
-    for (u8 i = 0; i != 4; ++i)
+    for (u8 i = 0; i != n_disp; ++i)
     {
-        if (has_disp[i])
-            PUSH(unit->bytes, disp[i]);
+        PUSH(unit->bytes, disp[i]);
     }
 }
 
@@ -523,35 +504,35 @@ int main(void)
 
     ParseInstructions(&unit, tokens);
 
-    for (size_t i = 0; i < unit.instructions.size; ++i)
-    {
-        if (unit.instructions.at(i).type == ASM_INSTR)
-        {
-            printf("Instruction: %.*s, %llu args\n",
-                   unit.instructions.at(i).name.length,
-                   unit.instructions.at(i).name.name,
-                   unit.instructions.at(i).args.size);
-            for (size_t j = 0; j < unit.instructions.at(i).args.size; ++j)
-            {
-                printf("\targ type ");
-                if (unit.instructions.at(i).args.at(j).label)
-                    printf("as label ");
-                switch (unit.instructions.at(i).args.at(j).type)
-                {
-                case ARG_IMM:
-                    printf("immediate: ");
-                    break;
-                case ARG_MEM:
-                    printf("memory: ");
-                    break;
-                case ARG_REG:
-                    printf("register: ");
-                    break;
-                }
-                printf("%llu\n", unit.instructions.at(i).args.at(j).value);
-            }
-        }
-    }
+    // for (size_t i = 0; i < unit.instructions.size; ++i)
+    // {
+    //     if (unit.instructions.at(i).type == ASM_INSTR)
+    //     {
+    //         printf("Instruction: %.*s, %llu args\n",
+    //                unit.instructions.at(i).name.length,
+    //                unit.instructions.at(i).name.name,
+    //                unit.instructions.at(i).args.size);
+    //         for (size_t j = 0; j < unit.instructions.at(i).args.size; ++j)
+    //         {
+    //             printf("\targ type ");
+    //             if (unit.instructions.at(i).args.at(j).label)
+    //                 printf("as label ");
+    //             switch (unit.instructions.at(i).args.at(j).type)
+    //             {
+    //             case ARG_IMM:
+    //                 printf("immediate: ");
+    //                 break;
+    //             case ARG_MEM:
+    //                 printf("memory: ");
+    //                 break;
+    //             case ARG_REG:
+    //                 printf("register: ");
+    //                 break;
+    //             }
+    //             printf("%llu\n", unit.instructions.at(i).args.at(j).value);
+    //         }
+    //     }
+    // }
 
     // EstimateLabels(&unit);
     // no need to estimate labels. we just need to start parsing, and at each label we find,
